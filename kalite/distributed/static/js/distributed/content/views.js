@@ -101,6 +101,12 @@ var ContentWrapperView = BaseView.extend({
                     self.add_content_view(external("document").VideoPlayerView);
                 });
                 break;
+
+            case "Scratchpad":
+                $script(window.sessionModel.get("STATIC_URL") + "js/distributed/bundles/bundle_scratchpad.js", function(){
+                    self.add_content_view(external("scratchpad").ScratchpadView);
+                });
+                break;
         }
     },
 

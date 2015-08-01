@@ -1,0 +1,3 @@
+[submodule "live-editor"]
+	path = external_modules/live-editor
+	url = https://github.com/learningequality/live-editor.git

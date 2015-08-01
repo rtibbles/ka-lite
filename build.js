@@ -100,6 +100,8 @@ fs.readdir("kalite", function(err, filenames) {
         fs.mkdirSync('kalite' + (staticfiles ? '' : '/distributed') + '/static/js/distributed/bundles/');
     }
 
+    module_paths.push("external_modules");
+
     var b = browserify({
         paths: module_paths,
         cache: {},
