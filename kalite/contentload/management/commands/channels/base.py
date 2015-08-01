@@ -78,7 +78,8 @@ def rebuild_topictree(
         whitewash_node_data=whitewash_node_data,
         retrieve_API_data=retrieve_API_data,
         channel_data={},
-        channel=None):
+        channel=None,
+        skip_assessment_items=False):
     """
     Downloads topictree (and supporting) data and uses it to
     rebuild the KA Lite topictree cache (topics.json).
@@ -88,7 +89,7 @@ def rebuild_topictree(
     Adds position data to every node in the topic tree.
     """
     
-    topic_tree, exercises, assessment_items, contents = retrieve_API_data(channel=channel)
+    topic_tree, exercises, assessment_items, contents = retrieve_API_data(channel=channel, skip_assessment_items=skip_assessment_items)
 
     exercise_lookup = dict((exercise["id"], exercise) for exercise in exercises)
 

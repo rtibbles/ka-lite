@@ -61,6 +61,11 @@ class Command(NoArgsCommand):
             dest='channel_data',
             default=None,
             help="Add custom path to channel data files"),
+        make_option('-s', '--skipassessmentitems',
+            action='store_true',
+            dest='skip_assessment_items',
+            default=False,
+            help="Skip Downloading of Assessment Items"),
     )
 
     def handle(self, *args, **options):

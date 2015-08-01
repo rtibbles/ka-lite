@@ -22,20 +22,23 @@ slug_key = {
     "Video": "readable_id",
     "Exercise": "name",
     "AssessmentItem": "id",
+    "Scratchpad": "slug",
 }
 
 title_key = {
     "Topic": "title",
     "Video": "title",
     "Exercise": "display_name",
-    "AssessmentItem": "name"
+    "AssessmentItem": "name",
+    "Scratchpad": "title",
 }
 
 id_key = {
     "Topic": "node_slug",
     "Video": "youtube_id",
     "Exercise": "name",
-    "AssessmentItem": "id"
+    "AssessmentItem": "id",
+    "Scratchpad": "id",
 }
 
 iconfilepath = "/images/power-mode/badges/"
@@ -46,7 +49,8 @@ attribute_whitelists = {
     "Topic": ["kind", "hide", "description", "id", "topic_page_url", "title", "extended_slug", "children", "node_slug", "in_knowledge_map", "icon_src", "child_data", "render_type", "path", "slug"],
     "Video": ["kind", "description", "title", "duration", "keywords", "youtube_id", "download_urls", "readable_id", "in_knowledge_map", "path", "slug", "format"],
     "Exercise": ["kind", "description", "related_video_readable_ids", "display_name", "live", "name", "seconds_per_fast_problem", "prerequisites", "all_assessment_items", "uses_assessment_items", "path", "slug"],
-    "AssessmentItem": ["kind", "name", "item_data", "author_names", "sha", "id"]
+    "AssessmentItem": ["kind", "name", "item_data", "author_names", "sha", "id"],
+    "Scratchpad": ["kind", "difficulty", "tags", "imageUrl", "nodeType", "revision", "height", "width", "canvasOnly"]
 }
 
 denormed_attribute_list = {
@@ -57,7 +61,7 @@ denormed_attribute_list = {
 kind_blacklist = [None, "Separator", "CustomStack", "Scratchpad", "Article"]
 
 slug_blacklist = ["new-and-noteworthy", "talks-and-interviews", "coach-res"] # not relevant
-slug_blacklist += ["cs", "towers-of-hanoi"] # not (yet) compatible
+slug_blacklist += ["towers-of-hanoi"] # not (yet) compatible
 slug_blacklist += ["cc-third-grade-math", "cc-fourth-grade-math", "cc-fifth-grade-math", "cc-sixth-grade-math", "cc-seventh-grade-math", "cc-eighth-grade-math"] # common core
 slug_blacklist += ["MoMA", "getty-museum", "stanford-medicine", "crash-course1", "mit-k12", "hour-of-code", "metropolitan-museum", "bitcoin", "tate", "crash-course1", "crash-course-bio-ecology", "british-museum", "aspeninstitute", "asian-art-museum", "amnh"] # partner content
 
@@ -143,7 +147,7 @@ def build_full_cache(items, id_key="id"):
 
     return output
 
-def retrieve_API_data(channel=None):
+def retrieve_API_data(channel=None, skip_assessment_items=False):
 
     # TODO(jamalex): See how much of what we do here can be replaced by KA's new projection-based API
     # http://www.khanacademy.org/api/v2/topics/topictree?projection={"topics":[{"slug":1,"childData":[{"id":1}]}]}
@@ -168,6 +172,15 @@ def retrieve_API_data(channel=None):
     for con in content:
         con["format"] = "mp4"
 
+    def recurse_topic_tree(node):
+        if node.get("kind") == "Scratchpad":
+            content.push(node)
+        elif node.get("kind") == "Topic":
+            for child in node.get("children"):
+                recurse_topic_tree(child)
+
+    recurse_topic_tree(topic_tree)
+
     # Compute and save file sizes
     logging.info("Checking remote content file sizes...")
     try:
@@ -186,43 +199,45 @@ def retrieve_API_data(channel=None):
 
     assessment_items = []
 
-    # Limit number of simultaneous requests
-    semaphore = threading.BoundedSemaphore(100)
+    if not skip_assessment_items:
 
-    def fetch_assessment_data(exercise):
-        logging.info("Fetching Assessment Item Data for {exercise}".format(exercise=exercise.display_name))
-        for assessment_item in exercise.all_assessment_items:
-            counter = 0
-            wait = 5
-            while wait:
-                try:
-                    semaphore.acquire()
-                    logging.info("Fetching assessment item {assessment}".format(assessment=assessment_item["id"]))
-                    assessment_data = khan.get_assessment_item(assessment_item["id"])
-                    semaphore.release()
-                    if assessment_data.get("item_data"):
-                        wait = 0
-                        assessment_items.append(assessment_data)
-                    else:
-                        logging.info("Fetching assessment item {assessment} failed retrying in {wait}".format(assessment=assessment_item["id"], wait=wait))
+        # Limit number of simultaneous requests
+        semaphore = threading.BoundedSemaphore(100)
+
+        def fetch_assessment_data(exercise):
+            logging.info("Fetching Assessment Item Data for {exercise}".format(exercise=exercise.display_name))
+            for assessment_item in exercise.all_assessment_items:
+                counter = 0
+                wait = 5
+                while wait:
+                    try:
+                        semaphore.acquire()
+                        logging.info("Fetching assessment item {assessment}".format(assessment=assessment_item["id"]))
+                        assessment_data = khan.get_assessment_item(assessment_item["id"])
+                        semaphore.release()
+                        if assessment_data.get("item_data"):
+                            wait = 0
+                            assessment_items.append(assessment_data)
+                        else:
+                            logging.info("Fetching assessment item {assessment} failed retrying in {wait}".format(assessment=assessment_item["id"], wait=wait))
+                            time.sleep(wait)
+                            wait = wait*2
+                            counter += 1
+                    except (requests.ConnectionError, requests.Timeout):
+                        semaphore.release()
                         time.sleep(wait)
                         wait = wait*2
                         counter += 1
-                except (requests.ConnectionError, requests.Timeout):
-                    semaphore.release()
-                    time.sleep(wait)
-                    wait = wait*2
-                    counter += 1
-                if counter > 5:
-                    logging.info("Fetching assessment item {assessment} failed more than 5 times, aborting".format(assessment=assessment_item["id"]))
-                    break
+                    if counter > 5:
+                        logging.info("Fetching assessment item {assessment} failed more than 5 times, aborting".format(assessment=assessment_item["id"]))
+                        break
 
-    threads = [threading.Thread(target=fetch_assessment_data, args=(exercise,)) for exercise in exercises_dummy]
+        threads = [threading.Thread(target=fetch_assessment_data, args=(exercise,)) for exercise in exercises_dummy]
 
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
 
     return topic_tree, exercises, assessment_items, content
 
