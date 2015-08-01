@@ -97,7 +97,7 @@ class Command(NoArgsCommand):
             "path": channel_path,
         }
 
-        topic_tree, exercises, assessment_items, content = channel_tools.rebuild_topictree(channel=channel_dict)
+        topic_tree, exercises, assessment_items, content = channel_tools.rebuild_topictree(channel=channel_dict, skip_assessment_items=options["skip_assessment_items"])
 
         exercise_cache = channel_tools.build_full_cache(exercises, id_key=channel_tools.id_key["Exercise"])
         assessment_item_cache = channel_tools.build_full_cache(assessment_items)

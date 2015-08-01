@@ -1,6 +1,8 @@
 var _ = require("underscore");
 var Handlebars = require("base/handlebars");
 
+var LiveEditor = require("live-editor/js/live-editor");
+
 var ContentBaseView = require("content/baseview");
 
 var ScratchpadView = ContentBaseView.extend({

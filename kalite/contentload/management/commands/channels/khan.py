@@ -50,15 +50,16 @@ attribute_whitelists = {
     "Video": ["kind", "description", "title", "duration", "keywords", "youtube_id", "download_urls", "readable_id", "in_knowledge_map", "path", "slug", "format"],
     "Exercise": ["kind", "description", "related_video_readable_ids", "display_name", "live", "name", "seconds_per_fast_problem", "prerequisites", "all_assessment_items", "uses_assessment_items", "path", "slug"],
     "AssessmentItem": ["kind", "name", "item_data", "author_names", "sha", "id"],
-    "Scratchpad": ["kind", "difficulty", "tags", "imageUrl", "nodeType", "revision", "height", "width", "canvasOnly"]
+    "Scratchpad": ["kind", "description", "title", "difficulty", "tags", "imageUrl", "nodeType", "revision", "height", "width", "canvasOnly", "isChallenge"]
 }
 
 denormed_attribute_list = {
     "Video": ["kind", "description", "title", "id", "slug", "path"],
-    "Exercise": ["kind", "description", "title", "id", "slug", "path"]
+    "Exercise": ["kind", "description", "title", "id", "slug", "path"],
+    "Scratchpad": ["kind", "description", "title", "id", "slug", "path"]
 }
 
-kind_blacklist = [None, "Separator", "CustomStack", "Scratchpad", "Article"]
+kind_blacklist = [None, "Separator", "CustomStack", "Article"]
 
 slug_blacklist = ["new-and-noteworthy", "talks-and-interviews", "coach-res"] # not relevant
 slug_blacklist += ["towers-of-hanoi"] # not (yet) compatible
@@ -137,7 +138,10 @@ def build_full_cache(items, id_key="id"):
                             {key: value for key, value in item.attribute.items()})
                         denorm_data(item[attribute])
             except APIError as e:
-                del item[attribute]
+                try:
+                    del item[attribute]
+                except KeyError:
+                    pass
         try:
             item = json.loads(item.toJSON())
         except AttributeError:
@@ -174,11 +178,21 @@ def retrieve_API_data(channel=None, skip_assessment_items=False):
 
     def recurse_topic_tree(node):
         if node.get("kind") == "Scratchpad":
-            content.push(node)
+            logging.info("Loading Scratchpad {id}".format(id=node.get("id")))
+            item = khan.get_scratchpad(node.get("id"))
+            if item.get("revision").get("mp3Url"):
+                item["format"] = "mp3"
+                item["download_urls"] = {
+                    "mp3": item.get("revision").get("mp3Url")
+                }
+            content.append(item)
         elif node.get("kind") == "Topic":
-            for child in node.get("children"):
+            for child in node.get("children", []):
+                recurse_topic_tree(child)
+            for child in node.get("child_data", []):
                 recurse_topic_tree(child)
 
+    logging.info("Fetching Khan scratchpads")
     recurse_topic_tree(topic_tree)
 
     # Compute and save file sizes
@@ -252,15 +266,14 @@ def query_remote_content_file_sizes(content_items, threads=10, blacklist=[]):
     if isinstance(content_items, dict):
         content_items = content_items.values()
 
-    content_items = [content for content in content_items if content["format"] in content.get("download_urls", {}) and content["youtube_id"] not in blacklist]
+    content_items = [content for content in content_items if content.get("format") in content.get("download_urls", {}) and content[id_key.get(content.get("kind"))] not in blacklist]
 
     pool = ThreadPool(threads)
     sizes = pool.map(get_content_length, content_items)
 
     for content, size in zip(content_items, sizes):
-        # TODO(jamalex): This should be generalized from "youtube_id" to support other content types
         if size:
-            sizes_by_id[content["youtube_id"]] = size
+            sizes_by_id[content[id_key.get(content.get("kind"))]] = size
 
     return sizes_by_id, sizes
 
