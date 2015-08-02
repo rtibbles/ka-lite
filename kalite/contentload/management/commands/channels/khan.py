@@ -151,7 +151,7 @@ def build_full_cache(items, id_key="id"):
 
     return output
 
-def retrieve_API_data(channel=None, skip_assessment_items=False):
+def retrieve_API_data(channel=None, skip_assessment_items=False, topic_tree_only=False):
 
     # TODO(jamalex): See how much of what we do here can be replaced by KA's new projection-based API
     # http://www.khanacademy.org/api/v2/topics/topictree?projection={"topics":[{"slug":1,"childData":[{"id":1}]}]}
@@ -162,96 +162,102 @@ def retrieve_API_data(channel=None, skip_assessment_items=False):
 
     topic_tree = khan.get_topic_tree()
 
-    logging.info("Fetching Khan exercises")
+    if not topic_tree_only:
 
-    exercises = khan.get_exercises()
+        logging.info("Fetching Khan exercises")
 
-    exercises_dummy = khan.get_exercises()
+        exercises = khan.get_exercises()
 
-    logging.info("Fetching Khan videos")
+        exercises_dummy = khan.get_exercises()
 
-    content = khan.get_videos()
+        logging.info("Fetching Khan videos")
 
-    # Hack to hardcode the mp4 format flag on Videos.
-    for con in content:
-        con["format"] = "mp4"
+        content = khan.get_videos()
 
-    def recurse_topic_tree(node):
-        if node.get("kind") == "Scratchpad":
-            logging.info("Loading Scratchpad {id}".format(id=node.get("id")))
-            item = khan.get_scratchpad(node.get("id"))
-            if item.get("revision").get("mp3Url"):
-                item["format"] = "mp3"
-                item["download_urls"] = {
-                    "mp3": item.get("revision").get("mp3Url")
-                }
-            content.append(item)
-        elif node.get("kind") == "Topic":
-            for child in node.get("children", []):
-                recurse_topic_tree(child)
-            for child in node.get("child_data", []):
-                recurse_topic_tree(child)
+        # Hack to hardcode the mp4 format flag on Videos.
+        for con in content:
+            con["format"] = "mp4"
 
-    logging.info("Fetching Khan scratchpads")
-    recurse_topic_tree(topic_tree)
+        def recurse_topic_tree(node):
+            if node.get("kind") == "Scratchpad":
+                logging.info("Loading Scratchpad {id}".format(id=node.get("id")))
+                item = khan.get_scratchpad(node.get("id"))
+                if item.get("revision").get("mp3Url"):
+                    item["format"] = "mp3"
+                    item["download_urls"] = {
+                        "mp3": item.get("revision").get("mp3Url")
+                    }
+                content.append(item)
+            elif node.get("kind") == "Topic":
+                for child in node.get("children", []):
+                    recurse_topic_tree(child)
+                for child in node.get("child_data", []):
+                    recurse_topic_tree(child)
 
-    # Compute and save file sizes
-    logging.info("Checking remote content file sizes...")
-    try:
-        with open(REMOTE_VIDEO_SIZE_FILEPATH, "r") as fp:
-            old_sizes = json.load(fp)
-    except:
-        old_sizes = {}
-    blacklist = [key for key, val in old_sizes.items() if val > 0] # exclude any we already know about
-    sizes_by_id, sizes = query_remote_content_file_sizes(content, blacklist=blacklist)
-    ensure_dir(os.path.dirname(REMOTE_VIDEO_SIZE_FILEPATH))
-    old_sizes.update(sizes_by_id)
-    sizes = OrderedDict(sorted(old_sizes.items()))
-    with open(REMOTE_VIDEO_SIZE_FILEPATH, "w") as fp:
-        json.dump(sizes, fp, indent=2)
-    logging.info("Finished checking remote content file sizes...")
+        logging.info("Fetching Khan scratchpads")
+        recurse_topic_tree(topic_tree)
 
-    assessment_items = []
+        # Compute and save file sizes
+        logging.info("Checking remote content file sizes...")
+        try:
+            with open(REMOTE_VIDEO_SIZE_FILEPATH, "r") as fp:
+                old_sizes = json.load(fp)
+        except:
+            old_sizes = {}
+        blacklist = [key for key, val in old_sizes.items() if val > 0] # exclude any we already know about
+        sizes_by_id, sizes = query_remote_content_file_sizes(content, blacklist=blacklist)
+        ensure_dir(os.path.dirname(REMOTE_VIDEO_SIZE_FILEPATH))
+        old_sizes.update(sizes_by_id)
+        sizes = OrderedDict(sorted(old_sizes.items()))
+        with open(REMOTE_VIDEO_SIZE_FILEPATH, "w") as fp:
+            json.dump(sizes, fp, indent=2)
+        logging.info("Finished checking remote content file sizes...")
 
-    if not skip_assessment_items:
+        assessment_items = []
 
-        # Limit number of simultaneous requests
-        semaphore = threading.BoundedSemaphore(100)
+        if not skip_assessment_items:
 
-        def fetch_assessment_data(exercise):
-            logging.info("Fetching Assessment Item Data for {exercise}".format(exercise=exercise.display_name))
-            for assessment_item in exercise.all_assessment_items:
-                counter = 0
-                wait = 5
-                while wait:
-                    try:
-                        semaphore.acquire()
-                        logging.info("Fetching assessment item {assessment}".format(assessment=assessment_item["id"]))
-                        assessment_data = khan.get_assessment_item(assessment_item["id"])
-                        semaphore.release()
-                        if assessment_data.get("item_data"):
-                            wait = 0
-                            assessment_items.append(assessment_data)
-                        else:
-                            logging.info("Fetching assessment item {assessment} failed retrying in {wait}".format(assessment=assessment_item["id"], wait=wait))
+            # Limit number of simultaneous requests
+            semaphore = threading.BoundedSemaphore(100)
+
+            def fetch_assessment_data(exercise):
+                logging.info("Fetching Assessment Item Data for {exercise}".format(exercise=exercise.display_name))
+                for assessment_item in exercise.all_assessment_items:
+                    counter = 0
+                    wait = 5
+                    while wait:
+                        try:
+                            semaphore.acquire()
+                            logging.info("Fetching assessment item {assessment}".format(assessment=assessment_item["id"]))
+                            assessment_data = khan.get_assessment_item(assessment_item["id"])
+                            semaphore.release()
+                            if assessment_data.get("item_data"):
+                                wait = 0
+                                assessment_items.append(assessment_data)
+                            else:
+                                logging.info("Fetching assessment item {assessment} failed retrying in {wait}".format(assessment=assessment_item["id"], wait=wait))
+                                time.sleep(wait)
+                                wait = wait*2
+                                counter += 1
+                        except (requests.ConnectionError, requests.Timeout):
+                            semaphore.release()
                             time.sleep(wait)
                             wait = wait*2
                             counter += 1
-                    except (requests.ConnectionError, requests.Timeout):
-                        semaphore.release()
-                        time.sleep(wait)
-                        wait = wait*2
-                        counter += 1
-                    if counter > 5:
-                        logging.info("Fetching assessment item {assessment} failed more than 5 times, aborting".format(assessment=assessment_item["id"]))
-                        break
+                        if counter > 5:
+                            logging.info("Fetching assessment item {assessment} failed more than 5 times, aborting".format(assessment=assessment_item["id"]))
+                            break
 
-        threads = [threading.Thread(target=fetch_assessment_data, args=(exercise,)) for exercise in exercises_dummy]
+            threads = [threading.Thread(target=fetch_assessment_data, args=(exercise,)) for exercise in exercises_dummy]
 
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+    else:
+        exercises = []
+        assessment_items= []
+        content = []
 
     return topic_tree, exercises, assessment_items, content
 

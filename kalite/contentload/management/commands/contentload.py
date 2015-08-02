@@ -15,6 +15,8 @@ from django.utils.text import slugify
 
 from fle_utils.general import ensure_dir
 
+from kalite.topic_tools import get_exercise_cache, get_content_cache, get_topic_tree
+
 def save_cache_file(cache_type, cache_object=None, node_cache=None, data_path=None):
 
     if cache_object is not None:
@@ -66,6 +68,11 @@ class Command(NoArgsCommand):
             dest='skip_assessment_items',
             default=False,
             help="Skip Downloading of Assessment Items"),
+        make_option('-t', '--topictreeonly',
+            action='store_true',
+            dest='topic_tree_only',
+            default=False,
+            help='Only regenerate the Topic Tree'),
     )
 
     def handle(self, *args, **options):
@@ -96,12 +103,21 @@ class Command(NoArgsCommand):
             "name": channel_name,
             "path": channel_path,
         }
+        topic_tree_only = options["topic_tree_only"]
 
-        topic_tree, exercises, assessment_items, content = channel_tools.rebuild_topictree(channel=channel_dict, skip_assessment_items=options["skip_assessment_items"])
+        skip_assessment_items = topic_tree_only or options["skip_assessment_items"]
 
-        exercise_cache = channel_tools.build_full_cache(exercises, id_key=channel_tools.id_key["Exercise"])
+        topic_tree, exercises, assessment_items, content = channel_tools.rebuild_topictree(channel=channel_dict,
+            skip_assessment_items=skip_assessment_items)
+
+        if topic_tree_only:
+            exercise_cache = get_exercise_cache()
+            content_cache = get_content_cache()
+        else:
+            exercise_cache = channel_tools.build_full_cache(exercises, id_key=channel_tools.id_key["Exercise"])
+            content_cache = channel_tools.build_full_cache(content)
+
         assessment_item_cache = channel_tools.build_full_cache(assessment_items)
-        content_cache = channel_tools.build_full_cache(content)
 
         node_cache = {}
 
@@ -119,9 +135,11 @@ class Command(NoArgsCommand):
         # it's safe to have this code smell for now.
         try:
             save_cache_file("Topic", cache_object=topic_tree, data_path=channel_path)
-            save_cache_file("Exercise", cache_object=exercise_cache, data_path=channel_path)
-            save_cache_file("AssessmentItem", cache_object=assessment_item_cache, data_path=channel_path)
-            save_cache_file("Content", cache_object=content_cache, data_path=channel_path)
+
+            if not topic_tree_only:
+                save_cache_file("Exercise", cache_object=exercise_cache, data_path=channel_path)
+                save_cache_file("AssessmentItem", cache_object=assessment_item_cache, data_path=channel_path)
+                save_cache_file("Content", cache_object=content_cache, data_path=channel_path)
 
         except Exception as e:
 

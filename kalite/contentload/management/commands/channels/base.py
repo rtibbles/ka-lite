@@ -91,9 +91,9 @@ def rebuild_topictree(
     
     topic_tree, exercises, assessment_items, contents = retrieve_API_data(channel=channel, skip_assessment_items=skip_assessment_items)
 
-    exercise_lookup = dict((exercise["id"], exercise) for exercise in exercises)
+    exercise_lookup = dict((str(exercise["id"]), exercise) for exercise in exercises)
 
-    content_lookup = dict((content["id"], content) for content in contents)
+    content_lookup = dict((str(content["id"]), content) for content in contents)
 
     def recurse_nodes(node, path=""):
         """
@@ -121,7 +121,7 @@ def rebuild_topictree(
             for i, child in enumerate(node.get("children", [])):
                 child_kind = child.get("kind", None)
 
-                if child_kind == "Video" or child_kind == "Exercise":
+                if child_kind == "Video" or child_kind == "Exercise" or child_kind == "Scratchpad":
                     children_to_delete.append(i)
 
             for i in reversed(children_to_delete):
@@ -140,7 +140,7 @@ def rebuild_topictree(
                     slug = exercise_lookup[child_id][slug_key] if exercise_lookup[child_id][slug_key] != "root" else "khan"
                     slug = slugify(unicode(slug))
                     exercise_lookup[child_id]["path"] = node["path"] + slug + "/"
-                elif child_kind == "Video":
+                elif child_kind == "Video" or child_kind == "Scratchpad":
                     child_denormed_data = content_lookup[child_id]
                     # Add path information here
                     slug = content_lookup[child_id][slug_key] if content_lookup[child_id][slug_key] != "root" else "khan"
