@@ -1,5 +1,8 @@
 var _ = require("underscore");
 var Handlebars = require("base/handlebars");
+var $ = require("base/jQuery");
+var Backbone = require("base/backbone");
+require("bootstrap");
 
 var LiveEditor = require("live-editor/js/live-editor");
 

@@ -4,3 +4,4 @@
 kalite/distributed/static/js/distributed/base/backbone-tastypie.js
 kalite/distributed/static/js/distributed/perseus/**/*
 static-libraries/**
+external_modules/**

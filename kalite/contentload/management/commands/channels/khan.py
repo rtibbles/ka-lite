@@ -50,7 +50,7 @@ attribute_whitelists = {
     "Video": ["kind", "description", "title", "duration", "keywords", "youtube_id", "download_urls", "readable_id", "in_knowledge_map", "path", "slug", "format"],
     "Exercise": ["kind", "description", "related_video_readable_ids", "display_name", "live", "name", "seconds_per_fast_problem", "prerequisites", "all_assessment_items", "uses_assessment_items", "path", "slug"],
     "AssessmentItem": ["kind", "name", "item_data", "author_names", "sha", "id"],
-    "Scratchpad": ["kind", "description", "title", "difficulty", "tags", "imageUrl", "nodeType", "revision", "height", "width", "canvasOnly", "isChallenge"]
+    "Scratchpad": ["kind", "description", "title", "difficulty", "tags", "imageUrl", "nodeType", "revision", "height", "width", "canvasOnly", "isChallenge", "id"]
 }
 
 denormed_attribute_list = {
