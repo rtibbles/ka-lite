@@ -19,7 +19,7 @@ var ContentWrapperView = BaseView.extend({
 
     initialize: function(options) {
 
-        _.bindAll(this, "user_data_loaded", "set_full_progress", "render", "add_content_view");
+        _.bindAll(this, "user_data_loaded", "set_full_progress", "render", "add_content_view", "setup_content_environment");
 
         var self = this;
 
@@ -38,7 +38,7 @@ var ContentWrapperView = BaseView.extend({
         // This is a hack to support the legacy VideoLog, separate from other ContentLog
         // TODO-BLOCKER (rtibbles) 0.14: Remove this
 
-        if (self.data_model.get("kind") == "Video") {
+        if (this.data_model.get("kind") == "Video") {
             LogCollection = VideoModels.VideoLogCollection;
         } else {
             LogCollection = Models.ContentLogCollection;
@@ -118,9 +118,9 @@ var ContentWrapperView = BaseView.extend({
             log_model: this.log_model
         });
 
-        this.content_view.render();
-
         this.$(".content-player-container").append(this.content_view.el);
+
+        this.content_view.render();
 
         this.points_view = this.add_subview(ContentPointsView, {
             model: this.log_model

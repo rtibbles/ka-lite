@@ -301,3 +301,7 @@ def handler_500(request):
         "value": unicode(value),
     }
     return HttpResponseServerError(render_to_string("distributed/500.html", context, context_instance=RequestContext(request)))
+
+@render_to('distributed/code_output.html')
+def code_output(request):
+    return {}

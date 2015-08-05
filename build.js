@@ -7,6 +7,9 @@ var _ = require("underscore");
 var hintify = require("hintify");
 var colors = require("colors");
 var async = require("async");
+var es6ify = require("es6ify");
+var path = require("path");
+var ncp = require("ncp").ncp;
 
 var watch = false;
 var debug = false;
@@ -166,6 +169,47 @@ fs.readdir("kalite", function(err, filenames) {
         logging.warn("Assuming that Khan Util files are already deAMDified");
     }
 
+    var external_assets = [
+        "external_modules/live-editor/build/js/live-editor.core_deps.js",
+        "external_modules/live-editor/build/js/live-editor.shared.js",
+        "external_modules/live-editor/build/js/live-editor.output_pjs_deps.js",
+        "external_modules/live-editor/build/js/live-editor.output.js",
+        "external_modules/live-editor/build/js/live-editor.output_pjs.js",
+        "external_modules/live-editor/build/css/live-editor.output.css",
+        "external_modules/live-editor/build/js/live-editor.editor_ace_deps.js",
+        "external_modules/live-editor/build/external/jshint/jshint.js"
+    ];
+
+    var external_assest_path = "kalite/distributed/static/external";
+
+    if (!fs.existsSync(external_assest_path)) {
+        fs.mkdirSync(external_assest_path);
+    }
+
+    async.each(external_assets, function(file, callback) {
+            var out = fs.createReadStream(file)
+            out.pipe(fs.createWriteStream(path.join(external_assest_path, path.basename(file))));
+            out.on('end', callback);
+    });
+
+    ncp.limit = 8;
+
+    var copy_folder = function(source_path, target_name) {
+        if (!fs.existsSync(external_assest_path + "/" + target_name)) {
+            fs.mkdirSync(external_assest_path + "/" + target_name);
+        }
+
+        ncp(source_path, external_assest_path + "/" + target_name, function (err){
+            if (err) {
+                logging.error(err);
+            } else {
+                logging.info(source_path + " moved to external assets " + target_name + " folder successfully!");
+            }
+        });
+    };
+
+    copy_folder("external_modules/live-editor/build", "live-editor");
+
 
     _.each(bundles, function(item) {b.add(item.bundle, {expose: item.alias});})
 
@@ -175,6 +219,7 @@ fs.readdir("kalite", function(err, filenames) {
     
     b.transform(deamdify);
     b.transform(lessify, {global: true});
+    b.transform(es6ify.configure(/external_modules\/live-editor\/js\/ui\/tooltips\/auto-suggest\.js/));
 
     if (watch) {
         var watchify = require("watchify");

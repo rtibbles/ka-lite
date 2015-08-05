@@ -1,3 +1,6 @@
 [submodule "live-editor"]
 	path = external_modules/live-editor
 	url = https://github.com/learningequality/live-editor.git
+[submodule "ace"]
+	path = external_modules/ace
+	url = https://github.com/ajaxorg/ace-builds.git

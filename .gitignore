@@ -61,6 +61,9 @@ venv/
 # Ignore changes to Perseus and Khan Exercises that do not come from intentional edits
 /kalite/distributed/static/js/distributed/perseus
 
+# Ignore external module static assets moved by build.js
+/kalite/distributed/static/external
+
 # Lacks documentation
 locale/
 node_modules/
